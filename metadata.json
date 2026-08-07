@@ -1,0 +1,6 @@
+{
+  "name": "GamaFit - Catálogo y Pedidos",
+  "description": "Catálogo web interactivo con gestión de productos en la nube y pedidos por WhatsApp para GamaFit.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
