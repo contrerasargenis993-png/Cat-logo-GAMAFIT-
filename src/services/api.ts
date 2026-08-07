@@ -57,18 +57,7 @@ function saveLocalProducts(products: Product[]) {
   try {
     localStorage.setItem(LOCAL_STORAGE_PRODUCTS_KEY, JSON.stringify(products));
   } catch (e) {
-    console.warn("localStorage quota exceeded, saving lightweight cache:", e);
-    try {
-      const lightweightProducts = products.map((p) => ({
-        ...p,
-        imageUrl: p.imageUrl.startsWith("data:image")
-          ? "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800"
-          : p.imageUrl,
-      }));
-      localStorage.setItem(LOCAL_STORAGE_PRODUCTS_KEY, JSON.stringify(lightweightProducts));
-    } catch (e2) {
-      console.error("Could not write to localStorage:", e2);
-    }
+    console.warn("localStorage write skipped:", e);
   }
 }
 
