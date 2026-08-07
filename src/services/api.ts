@@ -105,6 +105,55 @@ export async function loginAdmin(pin: string): Promise<boolean> {
   throw new Error("PIN de administrador incorrecto.");
 }
 
+export function compressImage(
+  dataUrl: string,
+  maxWidth = 800,
+  maxHeight = 800,
+  quality = 0.75
+): Promise<string> {
+  return new Promise((resolve) => {
+    if (!dataUrl || !dataUrl.startsWith("data:image")) {
+      resolve(dataUrl);
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth || height > maxHeight) {
+        if (width / height > maxWidth / maxHeight) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        } else {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+      const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+      resolve(compressedDataUrl);
+    };
+    img.onerror = () => {
+      resolve(dataUrl);
+    };
+    img.src = dataUrl;
+  });
+}
+
 export async function saveProductApi(
   pin: string,
   productData: Partial<Product>,
@@ -118,6 +167,14 @@ export async function saveProductApi(
   const id = productId || "prod_" + Date.now();
   const now = new Date().toISOString();
 
+  let finalImageUrl =
+    productData.imageUrl ||
+    "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800";
+
+  if (finalImageUrl.startsWith("data:image")) {
+    finalImageUrl = await compressImage(finalImageUrl, 800, 800, 0.75);
+  }
+
   const productToSave: Product = {
     id,
     name: productData.name || "Nuevo Producto",
@@ -125,9 +182,7 @@ export async function saveProductApi(
     description: productData.description || "",
     price: productData.price || 0,
     category: productData.category || "Accesorios Gym",
-    imageUrl:
-      productData.imageUrl ||
-      "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800",
+    imageUrl: finalImageUrl,
     badge: productData.badge || "",
     available: productData.available !== undefined ? productData.available : true,
     stock: productData.stock !== undefined ? productData.stock : 10,
@@ -135,9 +190,11 @@ export async function saveProductApi(
     updatedAt: now,
   };
 
+  let firestoreSuccess = false;
   try {
     const productRef = doc(db, "products", id);
     await setDoc(productRef, productToSave, { merge: true });
+    firestoreSuccess = true;
   } catch (err) {
     console.warn("Firestore saveProductApi failed, saving locally:", err);
   }
@@ -154,7 +211,9 @@ export async function saveProductApi(
   return {
     success: true,
     product: productToSave,
-    message: productId ? "Producto actualizado correctamente en la nube." : "Producto creado correctamente en la nube.",
+    message: productId
+      ? "Producto actualizado correctamente."
+      : "Producto creado y guardado correctamente.",
   };
 }
 
@@ -227,5 +286,5 @@ export async function uploadImageApi(
   _pin: string,
   base64Image: string
 ): Promise<string> {
-  return base64Image;
+  return await compressImage(base64Image, 800, 800, 0.75);
 }
