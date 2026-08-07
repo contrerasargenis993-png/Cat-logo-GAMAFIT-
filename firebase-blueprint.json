@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "products": {
+      "title": "Products",
+      "description": "Products in GamaFit catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "badge": { "type": "string" },
+        "available": { "type": "boolean" },
+        "stock": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "price", "category"]
+    },
+    "settings": {
+      "title": "Store Settings",
+      "description": "Store settings for GamaFit catalog",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "whatsappPhone": { "type": "string" },
+        "currency": { "type": "string" },
+        "logo": { "type": "string" },
+        "publicCatalogUrl": { "type": "string" },
+        "adminPin": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  }
+}

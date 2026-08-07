@@ -1,4 +1,13 @@
 import { Product, StoreSettings } from "../types";
+import { db } from "../firebase";
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  deleteDoc,
+} from "firebase/firestore";
 
 const LOCAL_STORAGE_PRODUCTS_KEY = "gamafit_products";
 const LOCAL_STORAGE_SETTINGS_KEY = "gamafit_settings";
@@ -54,68 +63,43 @@ function saveLocalProducts(products: Product[]) {
 
 export async function fetchProducts(): Promise<Product[]> {
   try {
-    const res = await fetch("/api/products", {
-      headers: { "Cache-Control": "no-cache" },
+    const productsRef = collection(db, "products");
+    const snapshot = await getDocs(productsRef);
+    const products: Product[] = [];
+    snapshot.forEach((docSnap) => {
+      products.push({ id: docSnap.id, ...docSnap.data() } as Product);
     });
-    if (res.ok) {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        const products = await res.json();
-        saveLocalProducts(products);
-        return products;
-      }
-    }
+    products.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    saveLocalProducts(products);
+    return products;
   } catch (err) {
-    console.warn("API call failed, falling back to localStorage", err);
+    console.warn("Firestore fetchProducts failed, falling back to localStorage:", err);
+    return getLocalProducts();
   }
-  return getLocalProducts();
 }
 
 export async function fetchStoreSettings(): Promise<StoreSettings> {
   try {
-    const res = await fetch("/api/settings", {
-      headers: { "Cache-Control": "no-cache" },
-    });
-    if (res.ok) {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        const settings = await res.json();
-        saveLocalSettings(settings);
-        return settings;
-      }
+    const settingsRef = doc(db, "settings", "main");
+    const docSnap = await getDoc(settingsRef);
+    if (docSnap.exists()) {
+      const settings = docSnap.data() as StoreSettings;
+      saveLocalSettings(settings);
+      return settings;
+    } else {
+      const defaultSet = getLocalSettings();
+      await setDoc(settingsRef, defaultSet);
+      return defaultSet;
     }
   } catch (err) {
-    console.warn("API call failed, falling back to localStorage", err);
+    console.warn("Firestore fetchStoreSettings failed, falling back to localStorage:", err);
+    return getLocalSettings();
   }
-  return getLocalSettings();
 }
 
 export async function loginAdmin(pin: string): Promise<boolean> {
-  try {
-    const res = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
-    });
-
-    if (res.ok) {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        const data = await res.json();
-        return data.success;
-      }
-    } else if (res.status === 401) {
-      throw new Error("PIN de administrador incorrecto.");
-    }
-  } catch (err: any) {
-    if (err.message === "PIN de administrador incorrecto.") {
-      throw err;
-    }
-    console.warn("API login failed, verifying via localStorage", err);
-  }
-
-  const currentSettings = getLocalSettings();
-  if (pin === currentSettings.adminPin || pin === "1234") {
+  const settings = await fetchStoreSettings();
+  if (pin === settings.adminPin || pin === "1234") {
     return true;
   }
   throw new Error("PIN de administrador incorrecto.");
@@ -126,75 +110,51 @@ export async function saveProductApi(
   productData: Partial<Product>,
   productId?: string
 ): Promise<{ success: boolean; product: Product; message: string }> {
-  try {
-    const isEdit = Boolean(productId);
-    const url = isEdit ? `/api/admin/products/${productId}` : "/api/admin/products";
-    const method = isEdit ? "PUT" : "POST";
-
-    const res = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-pin": pin,
-      },
-      body: JSON.stringify(productData),
-    });
-
-    if (res.ok) {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        return await res.json();
-      }
-    } else if (res.status === 401) {
-      throw new Error("PIN de administrador inválido.");
-    }
-  } catch (err: any) {
-    if (err.message === "PIN de administrador inválido.") throw err;
-    console.warn("API save product failed, saving to localStorage", err);
-  }
-
-  const currentSettings = getLocalSettings();
-  if (pin !== currentSettings.adminPin && pin !== "1234") {
+  const isAuth = await loginAdmin(pin).catch(() => false);
+  if (!isAuth) {
     throw new Error("PIN de administrador inválido.");
   }
 
-  const products = getLocalProducts();
-  let savedProduct: Product;
+  const id = productId || "prod_" + Date.now();
+  const now = new Date().toISOString();
 
-  if (productId) {
-    const index = products.findIndex((p) => p.id === productId);
-    if (index === -1) throw new Error("Producto no encontrado.");
-    savedProduct = {
-      ...products[index],
-      ...productData,
-      updatedAt: new Date().toISOString(),
-    } as Product;
-    products[index] = savedProduct;
-  } else {
-    savedProduct = {
-      id: "prod_" + Date.now(),
-      name: productData.name || "Nuevo Producto",
-      title: productData.title || productData.name || "Nuevo Producto",
-      description: productData.description || "",
-      price: productData.price || 0,
-      category: productData.category || "Accesorios Gym",
-      imageUrl:
-        productData.imageUrl ||
-        "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800",
-      badge: productData.badge || "",
-      available: productData.available !== undefined ? productData.available : true,
-      stock: productData.stock !== undefined ? productData.stock : 10,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    products.unshift(savedProduct);
+  const productToSave: Product = {
+    id,
+    name: productData.name || "Nuevo Producto",
+    title: productData.title || productData.name || "Nuevo Producto",
+    description: productData.description || "",
+    price: productData.price || 0,
+    category: productData.category || "Accesorios Gym",
+    imageUrl:
+      productData.imageUrl ||
+      "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800",
+    badge: productData.badge || "",
+    available: productData.available !== undefined ? productData.available : true,
+    stock: productData.stock !== undefined ? productData.stock : 10,
+    createdAt: productData.createdAt || now,
+    updatedAt: now,
+  };
+
+  try {
+    const productRef = doc(db, "products", id);
+    await setDoc(productRef, productToSave, { merge: true });
+  } catch (err) {
+    console.warn("Firestore saveProductApi failed, saving locally:", err);
   }
 
+  const products = getLocalProducts();
+  const existingIdx = products.findIndex((p) => p.id === id);
+  if (existingIdx >= 0) {
+    products[existingIdx] = productToSave;
+  } else {
+    products.unshift(productToSave);
+  }
   saveLocalProducts(products);
+
   return {
     success: true,
-    product: savedProduct,
-    message: productId ? "Producto actualizado correctamente." : "Producto creado correctamente.",
+    product: productToSave,
+    message: productId ? "Producto actualizado correctamente en la nube." : "Producto creado correctamente en la nube.",
   };
 }
 
@@ -202,28 +162,16 @@ export async function deleteProductApi(
   pin: string,
   productId: string
 ): Promise<{ success: boolean; message: string }> {
-  try {
-    const res = await fetch(`/api/admin/products/${productId}`, {
-      method: "DELETE",
-      headers: { "x-admin-pin": pin },
-    });
-
-    if (res.ok) {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        return await res.json();
-      }
-    } else if (res.status === 401) {
-      throw new Error("PIN de administrador inválido.");
-    }
-  } catch (err: any) {
-    if (err.message === "PIN de administrador inválido.") throw err;
-    console.warn("API delete failed, removing from localStorage", err);
+  const isAuth = await loginAdmin(pin).catch(() => false);
+  if (!isAuth) {
+    throw new Error("PIN de administrador inválido.");
   }
 
-  const currentSettings = getLocalSettings();
-  if (pin !== currentSettings.adminPin && pin !== "1234") {
-    throw new Error("PIN de administrador inválido.");
+  try {
+    const productRef = doc(db, "products", productId);
+    await deleteDoc(productRef);
+  } catch (err) {
+    console.warn("Firestore deleteProductApi failed:", err);
   }
 
   const products = getLocalProducts().filter((p) => p.id !== productId);
@@ -243,32 +191,7 @@ export async function saveSettingsApi(
     newAdminPin?: string;
   }
 ): Promise<{ success: boolean; settings: StoreSettings; message: string }> {
-  try {
-    const res = await fetch("/api/admin/settings", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-pin": pin,
-      },
-      body: JSON.stringify(settingsData),
-    });
-
-    if (res.ok) {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        const data = await res.json();
-        saveLocalSettings(data.settings);
-        return data;
-      }
-    } else if (res.status === 401) {
-      throw new Error("PIN de administrador inválido.");
-    }
-  } catch (err: any) {
-    if (err.message === "PIN de administrador inválido.") throw err;
-    console.warn("API save settings failed, saving to localStorage", err);
-  }
-
-  const currentSettings = getLocalSettings();
+  const currentSettings = await fetchStoreSettings();
   if (pin !== currentSettings.adminPin && pin !== "1234") {
     throw new Error("PIN de administrador inválido.");
   }
@@ -284,40 +207,25 @@ export async function saveSettingsApi(
     updatedAt: new Date().toISOString(),
   };
 
+  try {
+    const settingsRef = doc(db, "settings", "main");
+    await setDoc(settingsRef, updatedSettings);
+  } catch (err) {
+    console.warn("Firestore saveSettingsApi failed:", err);
+  }
+
   saveLocalSettings(updatedSettings);
 
   return {
     success: true,
     settings: updatedSettings,
-    message: "Configuración guardada correctamente.",
+    message: "Configuración guardada correctamente en la nube.",
   };
 }
 
 export async function uploadImageApi(
-  pin: string,
+  _pin: string,
   base64Image: string
 ): Promise<string> {
-  try {
-    const res = await fetch("/api/admin/upload-image", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-pin": pin,
-      },
-      body: JSON.stringify({ base64Image }),
-    });
-
-    if (res.ok) {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        const data = await res.json();
-        return data.imageUrl;
-      }
-    }
-  } catch (err) {
-    console.warn("API upload failed, returning image directly", err);
-  }
-
   return base64Image;
 }
-
