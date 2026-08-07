@@ -127,7 +127,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setFormName("");
     setFormTitle("");
     setFormPrice("");
-    setFormCategory("Proteínas");
+    setFormCategory("Accesorios Gym");
     setFormCustomCategory("");
     setFormDescription("");
     setFormImageUrl("");

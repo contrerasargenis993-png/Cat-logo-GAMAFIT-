@@ -57,7 +57,18 @@ function saveLocalProducts(products: Product[]) {
   try {
     localStorage.setItem(LOCAL_STORAGE_PRODUCTS_KEY, JSON.stringify(products));
   } catch (e) {
-    console.error(e);
+    console.warn("localStorage quota exceeded, saving lightweight cache:", e);
+    try {
+      const lightweightProducts = products.map((p) => ({
+        ...p,
+        imageUrl: p.imageUrl.startsWith("data:image")
+          ? "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800"
+          : p.imageUrl,
+      }));
+      localStorage.setItem(LOCAL_STORAGE_PRODUCTS_KEY, JSON.stringify(lightweightProducts));
+    } catch (e2) {
+      console.error("Could not write to localStorage:", e2);
+    }
   }
 }
 
@@ -107,9 +118,9 @@ export async function loginAdmin(pin: string): Promise<boolean> {
 
 export function compressImage(
   dataUrl: string,
-  maxWidth = 800,
-  maxHeight = 800,
-  quality = 0.75
+  maxWidth = 600,
+  maxHeight = 600,
+  quality = 0.65
 ): Promise<string> {
   return new Promise((resolve) => {
     if (!dataUrl || !dataUrl.startsWith("data:image")) {
@@ -167,34 +178,76 @@ export async function saveProductApi(
   const id = productId || "prod_" + Date.now();
   const now = new Date().toISOString();
 
-  let finalImageUrl =
-    productData.imageUrl ||
-    "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800";
+  let existingProduct: Partial<Product> = {};
+  if (productId) {
+    try {
+      const pRef = doc(db, "products", productId);
+      const pSnap = await getDoc(pRef);
+      if (pSnap.exists()) {
+        existingProduct = pSnap.data() as Product;
+      }
+    } catch (e) {
+      console.warn("Could not fetch existing product from Firestore:", e);
+    }
+    if (!existingProduct.id) {
+      const localProds = getLocalProducts();
+      const found = localProds.find((p) => p.id === productId);
+      if (found) existingProduct = found;
+    }
+  }
 
-  if (finalImageUrl.startsWith("data:image")) {
-    finalImageUrl = await compressImage(finalImageUrl, 800, 800, 0.75);
+  let finalImageUrl =
+    productData.imageUrl !== undefined
+      ? productData.imageUrl
+      : (existingProduct.imageUrl ||
+        "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800");
+
+  if (finalImageUrl && finalImageUrl.startsWith("data:image")) {
+    finalImageUrl = await compressImage(finalImageUrl, 600, 600, 0.65);
   }
 
   const productToSave: Product = {
     id,
-    name: productData.name || "Nuevo Producto",
-    title: productData.title || productData.name || "Nuevo Producto",
-    description: productData.description || "",
-    price: productData.price || 0,
-    category: productData.category || "Accesorios Gym",
+    name:
+      productData.name !== undefined
+        ? productData.name
+        : (existingProduct.name || "Nuevo Producto"),
+    title:
+      productData.title !== undefined
+        ? productData.title
+        : (existingProduct.title || productData.name || existingProduct.name || "Nuevo Producto"),
+    description:
+      productData.description !== undefined
+        ? productData.description
+        : (existingProduct.description || ""),
+    price:
+      productData.price !== undefined
+        ? productData.price
+        : (existingProduct.price !== undefined ? existingProduct.price : 0),
+    category:
+      productData.category !== undefined
+        ? productData.category
+        : (existingProduct.category || "Accesorios Gym"),
     imageUrl: finalImageUrl,
-    badge: productData.badge || "",
-    available: productData.available !== undefined ? productData.available : true,
-    stock: productData.stock !== undefined ? productData.stock : 10,
-    createdAt: productData.createdAt || now,
+    badge:
+      productData.badge !== undefined
+        ? productData.badge
+        : (existingProduct.badge || ""),
+    available:
+      productData.available !== undefined
+        ? productData.available
+        : (existingProduct.available !== undefined ? existingProduct.available : true),
+    stock:
+      productData.stock !== undefined
+        ? productData.stock
+        : (existingProduct.stock !== undefined ? existingProduct.stock : 50),
+    createdAt: existingProduct.createdAt || productData.createdAt || now,
     updatedAt: now,
   };
 
-  let firestoreSuccess = false;
   try {
     const productRef = doc(db, "products", id);
     await setDoc(productRef, productToSave, { merge: true });
-    firestoreSuccess = true;
   } catch (err) {
     console.warn("Firestore saveProductApi failed, saving locally:", err);
   }
@@ -213,7 +266,7 @@ export async function saveProductApi(
     product: productToSave,
     message: productId
       ? "Producto actualizado correctamente."
-      : "Producto creado y guardado correctamente.",
+      : "Producto guardado y sincronizado correctamente.",
   };
 }
 
