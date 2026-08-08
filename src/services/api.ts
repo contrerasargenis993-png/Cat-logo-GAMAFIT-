@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS: StoreSettings = {
   whatsappPhone: "+584124912366",
   currency: "$",
   logo: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=300",
-  publicCatalogUrl: "https://gamafitcatalogo1.netlify.app/",
+  publicCatalogUrl: "",
   adminPin: "1234",
   updatedAt: new Date().toISOString(),
 };
@@ -79,21 +79,29 @@ export async function fetchProducts(): Promise<Product[]> {
 }
 
 export async function fetchStoreSettings(): Promise<StoreSettings> {
+  const currentAppUrl = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "";
   try {
     const settingsRef = doc(db, "settings", "main");
     const docSnap = await getDoc(settingsRef);
     if (docSnap.exists()) {
       const settings = docSnap.data() as StoreSettings;
+      if (!settings.publicCatalogUrl || settings.publicCatalogUrl.includes("gamafitcatalogo1.netlify.app")) {
+        settings.publicCatalogUrl = currentAppUrl;
+      }
       saveLocalSettings(settings);
       return settings;
     } else {
-      const defaultSet = getLocalSettings();
+      const defaultSet = { ...getLocalSettings(), publicCatalogUrl: currentAppUrl };
       await setDoc(settingsRef, defaultSet);
       return defaultSet;
     }
   } catch (err) {
     console.warn("Firestore fetchStoreSettings failed, falling back to localStorage:", err);
-    return getLocalSettings();
+    const local = getLocalSettings();
+    if (!local.publicCatalogUrl || local.publicCatalogUrl.includes("gamafitcatalogo1.netlify.app")) {
+      local.publicCatalogUrl = currentAppUrl;
+    }
+    return local;
   }
 }
 
@@ -297,13 +305,19 @@ export async function saveSettingsApi(
     throw new Error("PIN de administrador inválido.");
   }
 
+  const currentAppUrl = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "";
+  let finalPublicUrl = settingsData.publicCatalogUrl !== undefined ? settingsData.publicCatalogUrl : currentSettings.publicCatalogUrl;
+  if (!finalPublicUrl || finalPublicUrl.includes("gamafitcatalogo1.netlify.app")) {
+    finalPublicUrl = currentAppUrl;
+  }
+
   const updatedSettings: StoreSettings = {
     ...currentSettings,
     storeName: settingsData.storeName || currentSettings.storeName,
     whatsappPhone: settingsData.whatsappPhone || currentSettings.whatsappPhone,
     currency: settingsData.currency || currentSettings.currency,
     logo: settingsData.logo || currentSettings.logo,
-    publicCatalogUrl: settingsData.publicCatalogUrl || currentSettings.publicCatalogUrl,
+    publicCatalogUrl: finalPublicUrl,
     adminPin: settingsData.newAdminPin || currentSettings.adminPin,
     updatedAt: new Date().toISOString(),
   };

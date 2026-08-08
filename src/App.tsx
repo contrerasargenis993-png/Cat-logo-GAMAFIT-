@@ -29,10 +29,10 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<StoreSettings>({
     storeName: "GamaFit Catalogo",
-    whatsappPhone: "5215512345678",
+    whatsappPhone: "+584124912366",
     currency: "$",
     logo: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=300",
-    publicCatalogUrl: "https://gamafitcatalogo1.netlify.app/",
+    publicCatalogUrl: typeof window !== "undefined" ? window.location.origin + window.location.pathname : "",
     updatedAt: new Date().toISOString(),
   });
 

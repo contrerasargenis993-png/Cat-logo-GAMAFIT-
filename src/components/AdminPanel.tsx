@@ -894,52 +894,59 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               )}
 
               {/* TAB 4: SHARE BROADCAST */}
-              {activeTab === "share" && (
-                <div className="space-y-4 max-w-lg mx-auto text-center p-4">
-                  <div className="w-12 h-12 bg-orange-600/10 border border-orange-500/30 rounded-2xl flex items-center justify-center mx-auto text-orange-400">
-                    <Share2 className="w-6 h-6" />
-                  </div>
+              {activeTab === "share" && (() => {
+                const currentAppUrl = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "";
+                const activeShareUrl =
+                  settings.publicCatalogUrl && !settings.publicCatalogUrl.includes("gamafitcatalogo1.netlify.app")
+                    ? settings.publicCatalogUrl
+                    : currentAppUrl || window.location.href;
 
-                  <h3 className="text-base font-black text-white">Difusión del Catálogo Público</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Comparte este enlace permanente con tus clientes en WhatsApp, Instagram, Facebook o estados. Los productos agregados se cargarán automáticamente desde la nube para todos.
-                  </p>
+                return (
+                  <div className="space-y-4 max-w-lg mx-auto text-center p-4">
+                    <div className="w-12 h-12 bg-orange-600/10 border border-orange-500/30 rounded-2xl flex items-center justify-center mx-auto text-orange-400">
+                      <Share2 className="w-6 h-6" />
+                    </div>
 
-                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl text-left">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      Enlace público
-                    </span>
-                    <p className="text-xs font-mono text-orange-400 break-all">
-                      {settings.publicCatalogUrl || window.location.href}
+                    <h3 className="text-base font-black text-white">Difusión del Catálogo Público</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Comparte este enlace permanente con tus clientes en WhatsApp, Instagram, Facebook o estados. Los productos agregados se cargarán automáticamente desde la nube para todos.
                     </p>
-                  </div>
 
-                  <div className="pt-2 flex flex-col gap-2">
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(settings.publicCatalogUrl || window.location.href);
-                        onShowToast("Enlace copiado al portapapeles", "success");
-                      }}
-                      className="w-full py-3 px-4 bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-orange-600/20 transition-all"
-                    >
-                      Copiar Enlace al Portapapeles
-                    </button>
+                    <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl text-left">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                        Enlace público activo
+                      </span>
+                      <p className="text-xs font-mono text-orange-400 break-all select-all">
+                        {activeShareUrl}
+                      </p>
+                    </div>
 
-                    <button
-                      onClick={() => {
-                        const url = settings.publicCatalogUrl || window.location.href;
-                        const text = encodeURIComponent(
-                          `🛍️ Mira nuestro catálogo ${settings.storeName} y realiza tu pedido directamente desde aquí:\n\n${url}`
-                        );
-                        window.open(`https://wa.me/?text=${text}`, "_blank");
-                      }}
-                      className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-600/20 transition-all"
-                    >
-                      Compartir Catálogo por WhatsApp
-                    </button>
+                    <div className="pt-2 flex flex-col gap-2">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(activeShareUrl);
+                          onShowToast("Enlace copiado al portapapeles", "success");
+                        }}
+                        className="w-full py-3 px-4 bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-orange-600/20 transition-all"
+                      >
+                        Copiar Enlace al Portapapeles
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const text = encodeURIComponent(
+                            `🛍️ Mira nuestro catálogo ${settings.storeName || "GamaFit"} y realiza tu pedido directamente desde aquí:\n\n${activeShareUrl}`
+                          );
+                          window.open(`https://wa.me/?text=${text}`, "_blank");
+                        }}
+                        className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-600/20 transition-all"
+                      >
+                        Compartir Catálogo por WhatsApp
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
             </div>
 

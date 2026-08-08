@@ -19,8 +19,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   if (!isOpen) return null;
 
+  const currentAppUrl = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "";
   const catalogUrl =
-    settings.publicCatalogUrl || window.location.href || "https://gamafitcatalogo1.netlify.app/";
+    settings.publicCatalogUrl && !settings.publicCatalogUrl.includes("gamafitcatalogo1.netlify.app")
+      ? settings.publicCatalogUrl
+      : currentAppUrl || window.location.href;
 
   const handleCopyLink = async () => {
     try {
