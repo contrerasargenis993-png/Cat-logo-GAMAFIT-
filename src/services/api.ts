@@ -205,48 +205,41 @@ export async function saveProductApi(
 
   const productToSave: Product = {
     id,
-    name:
-      productData.name !== undefined
-        ? productData.name
-        : (existingProduct.name || "Nuevo Producto"),
-    title:
-      productData.title !== undefined
-        ? productData.title
-        : (existingProduct.title || productData.name || existingProduct.name || "Nuevo Producto"),
-    description:
-      productData.description !== undefined
-        ? productData.description
-        : (existingProduct.description || ""),
-    price:
-      productData.price !== undefined
-        ? productData.price
-        : (existingProduct.price !== undefined ? existingProduct.price : 0),
-    category:
-      productData.category !== undefined
-        ? productData.category
-        : (existingProduct.category || "Accesorios Gym"),
-    imageUrl: finalImageUrl,
-    badge:
-      productData.badge !== undefined
-        ? productData.badge
-        : (existingProduct.badge || ""),
-    available:
-      productData.available !== undefined
-        ? productData.available
-        : (existingProduct.available !== undefined ? existingProduct.available : true),
-    stock:
-      productData.stock !== undefined
-        ? productData.stock
-        : (existingProduct.stock !== undefined ? existingProduct.stock : 50),
-    createdAt: existingProduct.createdAt || productData.createdAt || now,
+    name: String(productData.name ?? existingProduct.name ?? "Nuevo Producto"),
+    title: String(
+      productData.title ??
+        existingProduct.title ??
+        productData.name ??
+        existingProduct.name ??
+        "Nuevo Producto"
+    ),
+    description: String(
+      productData.description ?? existingProduct.description ?? ""
+    ),
+    price: Number(productData.price ?? existingProduct.price ?? 0),
+    category: String(
+      productData.category ?? existingProduct.category ?? "Accesorios Gym"
+    ),
+    imageUrl: String(
+      finalImageUrl ||
+        "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=800"
+    ),
+    badge: String(productData.badge ?? existingProduct.badge ?? ""),
+    available: Boolean(
+      productData.available ?? existingProduct.available ?? true
+    ),
+    stock: Number(productData.stock ?? existingProduct.stock ?? 50),
+    createdAt: String(existingProduct.createdAt || productData.createdAt || now),
     updatedAt: now,
   };
 
   try {
     const productRef = doc(db, "products", id);
     await setDoc(productRef, productToSave, { merge: true });
-  } catch (err) {
-    console.warn("Firestore saveProductApi failed, saving locally:", err);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("Firestore saveProductApi failed:", err);
+    throw new Error("No se pudo guardar en la nube Firestore: " + errorMsg);
   }
 
   const products = getLocalProducts();
@@ -262,8 +255,8 @@ export async function saveProductApi(
     success: true,
     product: productToSave,
     message: productId
-      ? "Producto actualizado correctamente."
-      : "Producto guardado y sincronizado correctamente.",
+      ? "Producto actualizado y sincronizado en la nube."
+      : "Producto guardado y sincronizado en la nube.",
   };
 }
 
@@ -279,14 +272,45 @@ export async function deleteProductApi(
   try {
     const productRef = doc(db, "products", productId);
     await deleteDoc(productRef);
-  } catch (err) {
-    console.warn("Firestore deleteProductApi failed:", err);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("Firestore deleteProductApi failed:", err);
+    throw new Error("No se pudo eliminar de la nube Firestore: " + errorMsg);
   }
 
   const products = getLocalProducts().filter((p) => p.id !== productId);
   saveLocalProducts(products);
 
-  return { success: true, message: "Producto eliminado correctamente." };
+  return { success: true, message: "Producto eliminado correctamente de la nube." };
+}
+
+export async function deleteAllProductsApi(
+  pin: string
+): Promise<{ success: boolean; message: string }> {
+  const isAuth = await loginAdmin(pin).catch(() => false);
+  if (!isAuth) {
+    throw new Error("PIN de administrador inválido.");
+  }
+
+  try {
+    const productsRef = collection(db, "products");
+    const snapshot = await getDocs(productsRef);
+    const deletePromises: Promise<void>[] = [];
+    snapshot.forEach((docSnap) => {
+      deletePromises.push(deleteDoc(doc(db, "products", docSnap.id)));
+    });
+    await Promise.all(deletePromises);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : "Error de red";
+    console.error("Firestore deleteAllProductsApi error:", err);
+    throw new Error("Error al eliminar los productos de la nube: " + errorMsg);
+  }
+
+  saveLocalProducts([]);
+  return {
+    success: true,
+    message: "Se han eliminado todos los productos del catálogo en la nube.",
+  };
 }
 
 export async function saveSettingsApi(

@@ -26,6 +26,7 @@ import {
   loginAdmin,
   saveProductApi,
   deleteProductApi,
+  deleteAllProductsApi,
   saveSettingsApi,
   uploadImageApi,
 } from "../services/api";
@@ -84,6 +85,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Delete confirmation modal state
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
 
   if (!isOpen) return null;
 
@@ -272,6 +274,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } finally {
       setIsSubmitting(false);
       setDeleteConfirmId(null);
+    }
+  };
+
+  // Clear All Products Handler
+  const handleClearAllProducts = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await deleteAllProductsApi(pin);
+      if (res.success) {
+        onShowToast(res.message || "Catálogo vaciado correctamente.", "success");
+        await onRefreshData();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al vaciar el catálogo";
+      onShowToast(msg, "error");
+    } finally {
+      setIsSubmitting(false);
+      setShowClearAllConfirm(false);
     }
   };
 
@@ -494,13 +514,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       />
                     </div>
 
-                    <button
-                      onClick={handleOpenCreateForm}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-600/20 transition-all"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Agregar Producto</span>
-                    </button>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      {products.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowClearAllConfirm(true)}
+                          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/60 text-xs font-bold rounded-xl transition-all"
+                          title="Eliminar todos los productos de la nube"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Vaciar Catálogo</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={handleOpenCreateForm}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-600/20 transition-all"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Agregar Producto</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Products Table / Cards */}
@@ -975,6 +1009,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 className="px-4 py-2 text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-500 rounded-xl shadow-lg shadow-rose-600/20"
               >
                 Sí, Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLEAR ALL PRODUCTS CONFIRMATION MODAL */}
+      {showClearAllConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-slate-900 border border-rose-500/30 rounded-3xl p-6 shadow-2xl text-center space-y-4">
+            <div className="w-12 h-12 bg-rose-950/80 border border-rose-500/40 rounded-2xl flex items-center justify-center mx-auto text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <h4 className="text-base font-black text-white uppercase tracking-wider">
+              ¿Vaciar catálogo completo?
+            </h4>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Esta acción eliminará <strong className="text-rose-400">TODOS los {products.length} productos</strong> actualmente registrados en la base de datos de la nube. El catálogo público quedará totalmente limpio (0 productos) para que agregues nuevos ítems sin límites.
+            </p>
+
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <button
+                disabled={isSubmitting}
+                onClick={() => setShowClearAllConfirm(false)}
+                className="px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={isSubmitting}
+                onClick={handleClearAllProducts}
+                className="px-5 py-2.5 text-xs font-black text-white bg-rose-600 hover:bg-rose-500 rounded-xl shadow-lg shadow-rose-600/30 active:scale-95 transition-all"
+              >
+                {isSubmitting ? "Eliminando..." : "Sí, Vaciar Catálogo"}
               </button>
             </div>
           </div>
